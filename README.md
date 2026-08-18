@@ -22,7 +22,7 @@
   <img src="docs/preview/hero.png" alt="Three fictional photographs paired with their marker-led editorial illustrations" width="100%">
 </p>
 
-An installable Codex Skill that transforms one source photograph into a clean vertical editorial composition. The original photo remains intact above a restrained, source-derived fashion illustration with a short English title and a deterministic final layout.
+An installable Codex Skill that transforms one source photograph into a clean editorial composition. Landscape and square photos stack above the illustration; portrait photos sit beside it. The original photo remains intact, and the deterministic footer uses two quiet English lines.
 
 ## Install
 
@@ -47,7 +47,7 @@ The Skill accepts JPG/JPEG, PNG, static WebP, MPO, and HEIC/HEIF sources contain
 | --- | --- |
 | **1. Validate** | Preflight checks the source format, orientation, dimensions, and frame count without altering the photograph. |
 | **2. Illustrate** | One image-transformation generation distills the source into marker masses, selective brush-pen contours, restrained environmental wash, and generous negative space. |
-| **3. Compose** | A deterministic compositor preserves the original photo, places the illustration, adds a short title and source-derived palette, and exports the final vertical artwork. |
+| **3. Compose** | A deterministic compositor preserves the original photo, places the complete illustration image, matches its paper color, and adds a two-line Caveat footer. |
 
 ## What it preserves
 
@@ -62,12 +62,12 @@ The illustration language is marker-led and editorial: connected color masses es
 
 ## Output
 
-The final artwork is a vertical editorial composition containing:
+The final artwork is an orientation-aware editorial composition containing:
 
 1. the unchanged source photograph;
-2. a source-derived illustration panel;
-3. a concise two- or three-word English title;
-4. four restrained palette swatches.
+2. a source-derived illustration on a matching paper-color canvas;
+3. a 2–4 word English title;
+4. a natural 4–8 word English subtitle.
 
 ## Requirements
 
@@ -82,7 +82,7 @@ The included setup helper installs only the pinned runtime dependencies needed b
 - the `photo-to-editorial-illustration` Skill instructions;
 - active prompt and abstraction references;
 - source preflight and deterministic compositor scripts;
-- the packaged Noto Sans font and its SIL Open Font License.
+- the packaged Caveat Regular font and its SIL Open Font License.
 
 ## Privacy
 
@@ -90,4 +90,4 @@ Source photos and generated outputs remain in the user's runtime workspace. They
 
 ## License
 
-The Skill code and documentation are licensed under the [MIT License](LICENSE). The bundled Noto Sans font remains licensed under the SIL Open Font License 1.1 in `photo-to-editorial-illustration/assets/fonts/OFL.txt`.
+The Skill code and documentation are licensed under the [MIT License](LICENSE). The bundled Caveat Regular font remains licensed under the SIL Open Font License 1.1 in `photo-to-editorial-illustration/assets/fonts/OFL.txt`.

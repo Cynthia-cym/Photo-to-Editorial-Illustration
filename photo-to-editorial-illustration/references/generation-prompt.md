@@ -1,4 +1,4 @@
-# Photo-to-Editorial Illustration — Image Prompt
+# Photo Abstraction — Image Prompt
 
 ## Assembly Contract
 
@@ -10,6 +10,8 @@ Resolve four source-dependent values:
 - `{WATERCOLOR_ELIGIBILITY}` from explicitly retained distant continuous fields, or an empty value when none are eligible.
 
 Insert the Abstraction Prompt Fragment and Visual Prompt Fragment from [style-media-grammar.md](style-media-grammar.md) into `{ABSTRACTION_KERNEL}` and `{VISUAL_KERNEL}` exactly as written. Use the Watercolor Eligibility Prompt Fragment only when applicable. Replace every placeholder once and send only the completed Image-Facing Template to the model.
+
+Insert the Illustration Safety Margin Prompt Fragment from [layout-grammar.md](layout-grammar.md) into `{LAYOUT_KERNEL}` exactly as written.
 
 ## Human Prompt Fragment
 
@@ -66,6 +68,8 @@ VISUAL LANGUAGE
 {VISUAL_KERNEL}
 
 {WATERCOLOR_ELIGIBILITY}
+
+{LAYOUT_KERNEL}
 
 OUTPUT
 Create one transformed illustration only, using the same aspect ratio as the source image, on continuous warm-white paper.

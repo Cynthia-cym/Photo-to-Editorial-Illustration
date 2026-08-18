@@ -10,37 +10,29 @@ import hashlib
 import json
 import math
 import re
-from collections import deque
 from pathlib import Path
 from statistics import median
 from typing import Dict, List, Tuple
 
-from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 
 RGB = Tuple[int, int, int]
 
 CONFIG = {
     "max_canvas_width": 2048,
-    "paper_color": (249, 247, 241),
     "motif_width_ratio": 0.72,
     "motif_max_height_ratio": 0.62,
     "panel_padding_ratio": 0.06,
-    "footer_right_padding_ratio": 0.055,
-    "footer_height_ratio": 0.17,
-    "font_size_ratio": 0.045,
-    "line_gap_ratio": 0.35,
-    "paper_distance_low": 10,
-    "paper_distance_high": 42,
-    "component_thumbnail_max": 512,
-    "component_relative_area": 0.001,
+    "font_size_ratio": 0.024,
+    "line_gap_ratio": 0.525,
 }
 
 FONT_PATH = (
     Path(__file__).resolve().parents[1]
     / "assets"
     / "fonts"
-    / "KaushanScript-Regular.ttf"
+    / "Caveat-Regular.ttf"
 )
 
 FALLBACK_TEXT_COLOR: RGB = (138, 105, 88)
@@ -77,108 +69,6 @@ def _estimate_paper_color(image: Image.Image) -> RGB:
             for index, value in enumerate(pixel):
                 channels[index].append(value)
     return tuple(int(median(channel)) for channel in channels)
-
-
-def _distance_mask(image: Image.Image, paper_color: RGB) -> Image.Image:
-    paper = Image.new("RGB", image.size, paper_color)
-    difference = ImageChops.difference(image, paper)
-    red, green, blue = difference.split()
-    return ImageChops.lighter(ImageChops.lighter(red, green), blue)
-
-
-def _component_bboxes(mask: Image.Image) -> List[Tuple[int, Tuple[int, int, int, int]]]:
-    width, height = mask.size
-    pixels = mask.load()
-    visited = bytearray(width * height)
-    components = []
-
-    for y in range(height):
-        for x in range(width):
-            offset = y * width + x
-            if visited[offset] or pixels[x, y] == 0:
-                continue
-            queue = deque([(x, y)])
-            visited[offset] = 1
-            area = 0
-            left = right = x
-            top = bottom = y
-
-            while queue:
-                current_x, current_y = queue.popleft()
-                area += 1
-                left = min(left, current_x)
-                right = max(right, current_x)
-                top = min(top, current_y)
-                bottom = max(bottom, current_y)
-                for next_x, next_y in (
-                    (current_x - 1, current_y),
-                    (current_x + 1, current_y),
-                    (current_x, current_y - 1),
-                    (current_x, current_y + 1),
-                ):
-                    if not (0 <= next_x < width and 0 <= next_y < height):
-                        continue
-                    next_offset = next_y * width + next_x
-                    if visited[next_offset] or pixels[next_x, next_y] == 0:
-                        continue
-                    visited[next_offset] = 1
-                    queue.append((next_x, next_y))
-
-            components.append((area, (left, top, right + 1, bottom + 1)))
-    return components
-
-
-def _primary_content_bbox(image: Image.Image, distance: Image.Image) -> Tuple[int, int, int, int]:
-    scale = min(1.0, CONFIG["component_thumbnail_max"] / max(image.size))
-    thumbnail_size = (
-        max(1, round(image.width * scale)),
-        max(1, round(image.height * scale)),
-    )
-    binary = distance.point(lambda value: 255 if value >= CONFIG["paper_distance_high"] else 0)
-    thumbnail = binary.resize(thumbnail_size, Image.Resampling.NEAREST)
-    components = _component_bboxes(thumbnail)
-    if not components:
-        return (0, 0, image.width, image.height)
-
-    largest_area = max(area for area, _ in components)
-    minimum_area = max(3, round(largest_area * CONFIG["component_relative_area"]))
-    selected = [box for area, box in components if area >= minimum_area]
-    if not selected:
-        selected = [max(components, key=lambda item: item[0])[1]]
-
-    left = min(box[0] for box in selected)
-    top = min(box[1] for box in selected)
-    right = max(box[2] for box in selected)
-    bottom = max(box[3] for box in selected)
-    inverse_scale = 1.0 / scale
-    padding = max(2, round(min(image.size) * 0.008))
-    return (
-        max(0, math.floor(left * inverse_scale) - padding),
-        max(0, math.floor(top * inverse_scale) - padding),
-        min(image.width, math.ceil(right * inverse_scale) + padding),
-        min(image.height, math.ceil(bottom * inverse_scale) + padding),
-    )
-
-
-def _illustration_layer(image: Image.Image) -> Tuple[Image.Image, Tuple[int, int, int, int]]:
-    paper_color = _estimate_paper_color(image)
-    distance = _distance_mask(image, paper_color)
-    bbox = _primary_content_bbox(image, distance)
-    cropped = image.crop(bbox)
-    cropped_distance = distance.crop(bbox)
-    low = CONFIG["paper_distance_low"]
-    high = CONFIG["paper_distance_high"]
-    span = high - low
-    alpha = cropped_distance.point(
-        lambda value: 0
-        if value <= low
-        else 255
-        if value >= high
-        else round((value - low) * 255 / span)
-    )
-    layer = cropped.convert("RGBA")
-    layer.putalpha(alpha)
-    return layer, bbox
 
 
 def _luminance(color: RGB) -> float:
@@ -222,7 +112,7 @@ def _ranked_illustration_colors(layer: Image.Image) -> List[Tuple[int, RGB]]:
     )
 
 
-def _select_text_color(layer: Image.Image) -> RGB:
+def _select_text_color(layer: Image.Image, paper_color: RGB) -> RGB:
     ranked = _ranked_illustration_colors(layer)
     if not ranked:
         return FALLBACK_TEXT_COLOR
@@ -237,7 +127,7 @@ def _select_text_color(layer: Image.Image) -> RGB:
             continue
         if saturation > 105 or warmth < -12:
             continue
-        if _luminance(CONFIG["paper_color"]) - luminance < 70:
+        if _luminance(paper_color) - luminance < 70:
             continue
         prevalence = count / total
         score = (
@@ -320,17 +210,13 @@ def compose_editorial(
         final_dimensions = (board_width * 2, board_height)
 
     board_left, board_top = illustration_origin
-    canvas = Image.new("RGB", final_dimensions, CONFIG["paper_color"])
+    paper_color = _estimate_paper_color(illustration)
+    canvas = Image.new("RGB", final_dimensions, paper_color)
     canvas.paste(photo, photo_origin)
 
-    layer, illustration_bbox = _illustration_layer(illustration)
-    text_color = _select_text_color(layer)
-
-    footer_right_padding = round(
-        board_width * CONFIG["footer_right_padding_ratio"]
-    )
-    footer_height = round(board_height * CONFIG["footer_height_ratio"])
-    illustration_area_height = board_height - footer_height
+    layer = illustration.convert("RGBA")
+    illustration_bbox = (0, 0, illustration.width, illustration.height)
+    text_color = _select_text_color(layer, paper_color)
 
     target_width = round(board_width * CONFIG["motif_width_ratio"])
     target_height = round(board_height * CONFIG["motif_max_height_ratio"])
@@ -339,8 +225,7 @@ def compose_editorial(
         min(board_width, board_height) * CONFIG["panel_padding_ratio"]
     )
     maximum_width = max(1, board_width - panel_padding * 2)
-    maximum_height = max(1, illustration_area_height - panel_padding * 2)
-    contain_scale = min(maximum_width / layer.width, maximum_height / layer.height)
+    contain_scale = maximum_width / layer.width
     scale = min(requested_scale, contain_scale)
     motif_size = (
         max(1, round(layer.width * scale)),
@@ -348,42 +233,73 @@ def compose_editorial(
     )
     motif = layer.resize(motif_size, Image.Resampling.LANCZOS)
 
-    motif_x = board_left + round((board_width - motif.width) / 2)
-    visible_alpha = motif.getchannel("A").point(
-        lambda value: 255 if value >= 80 else 0
-    )
-    visible_bbox = visible_alpha.getbbox() or (0, 0, motif.width, motif.height)
-    visible_center_y = (visible_bbox[1] + visible_bbox[3]) / 2
-    usable_top = board_top + panel_padding
-    usable_bottom = board_top + illustration_area_height
-    motif_y = round((usable_top + usable_bottom) / 2 - visible_center_y)
-    canvas.paste(motif, (motif_x, motif_y), motif)
-
-    draw = ImageDraw.Draw(canvas)
     preferred_font_size = max(
-        24,
-        round(min(board_width, board_height) * CONFIG["font_size_ratio"]),
+        36,
+        round(min(final_dimensions) * CONFIG["font_size_ratio"]),
     )
-    text_width = board_width - footer_right_padding * 2
+    text_width = motif.width
     font, font_used, font_size = _fit_font(
         (title, subtitle), preferred_font_size, text_width
     )
     line_gap = round(font_size * CONFIG["line_gap_ratio"])
     title_bbox = font.getbbox(title)
     subtitle_bbox = font.getbbox(subtitle)
-    title_height = title_bbox[3] - title_bbox[1]
-    subtitle_height = subtitle_bbox[3] - subtitle_bbox[1]
-    text_block_height = title_height + line_gap + subtitle_height
-    footer_top = board_top + illustration_area_height
-    footer_bottom = board_top + board_height
-    text_top = footer_top + round((footer_height - text_block_height) / 2)
-    text_right = board_left + board_width - footer_right_padding
+    text_block_height = (
+        title_bbox[3]
+        - title_bbox[1]
+        + line_gap
+        + subtitle_bbox[3]
+        - subtitle_bbox[1]
+    )
 
-    title_position = (text_right - title_bbox[2], text_top - title_bbox[1])
-    subtitle_top = text_top + title_height + line_gap
+    remaining_space = board_height - motif.height - text_block_height
+    if remaining_space < 5:
+        adjusted_height = max(1, board_height - text_block_height - 5)
+        scale = adjusted_height / layer.height
+        motif_size = (
+            max(1, round(layer.width * scale)),
+            adjusted_height,
+        )
+        motif = layer.resize(motif_size, Image.Resampling.LANCZOS)
+        remaining_space = board_height - motif.height - text_block_height
+
+    height_adjustment = (5 - remaining_space % 5) % 5
+    if height_adjustment:
+        adjusted_height = motif.height - height_adjustment
+        scale = adjusted_height / layer.height
+        motif_size = (
+            max(1, round(layer.width * scale)),
+            adjusted_height,
+        )
+        motif = layer.resize(motif_size, Image.Resampling.LANCZOS)
+        remaining_space = board_height - motif.height - text_block_height
+
+    illustration_text_gap = remaining_space // 5
+    vertical_safe_margin = illustration_text_gap * 2
+    text_bottom = board_top + board_height - vertical_safe_margin
+    subtitle_position_y = text_bottom - subtitle_bbox[3]
+    subtitle_rendered_top = subtitle_position_y + subtitle_bbox[1]
+    title_rendered_bottom = subtitle_rendered_top - line_gap
+    title_position_y = title_rendered_bottom - title_bbox[3]
+    text_top = title_position_y + title_bbox[1]
+
+    motif_x = board_left + round((board_width - motif.width) / 2)
+    motif_y = board_top + vertical_safe_margin
+    canvas.paste(motif, (motif_x, motif_y), motif)
+    illustration_image_box = [
+        motif_x,
+        motif_y,
+        motif_x + motif.width,
+        motif_y + motif.height,
+    ]
+
+    draw = ImageDraw.Draw(canvas)
+    text_right = illustration_image_box[2]
+
+    title_position = (text_right - title_bbox[2], title_position_y)
     subtitle_position = (
         text_right - subtitle_bbox[2],
-        subtitle_top - subtitle_bbox[1],
+        subtitle_position_y,
     )
     draw.text(title_position, title, font=font, fill=text_color)
     draw.text(subtitle_position, subtitle, font=font, fill=text_color)
@@ -425,21 +341,23 @@ def compose_editorial(
         ],
         "final_dimensions": list(final_dimensions),
         "illustration_source_bbox": list(illustration_bbox),
-        "motif_box": [motif_x, motif_y, motif_x + motif.width, motif_y + motif.height],
-        "motif_dimensions": list(motif.size),
-        "motif_effective_scale": scale,
+        "illustration_image_box": illustration_image_box,
+        "illustration_image_dimensions": list(motif.size),
+        "illustration_effective_scale": scale,
+        "canvas_paper_color": _hex(paper_color),
         "text_color": _hex(text_color),
         "font_used": font_used,
+        "preferred_font_size": preferred_font_size,
         "font_size": font_size,
         "line_gap": line_gap,
         "footer_box": [
             board_left,
-            footer_top,
+            text_top,
             board_left + board_width,
-            footer_bottom,
+            text_bottom,
         ],
-        "footer_height_ratio": CONFIG["footer_height_ratio"],
-        "footer_right_padding": footer_right_padding,
+        "vertical_safe_margin": vertical_safe_margin,
+        "illustration_text_gap": illustration_text_gap,
         "title": title,
         "subtitle": subtitle,
         "title_box": rendered_title_box,

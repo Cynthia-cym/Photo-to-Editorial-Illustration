@@ -26,8 +26,9 @@ Use this fixed sequence:
 3. For every retained human, apply [geometry-grammar.md](references/geometry-grammar.md) and [face-policy.md](references/face-policy.md), then use the Human Prompt Fragment in [generation-prompt.md](references/generation-prompt.md).
 4. For every retained animal, use the Animal Prompt Fragment in [element-abstraction-grammar.md](references/element-abstraction-grammar.md).
 5. Use the Abstraction Prompt Fragment and Visual Prompt Fragment from [style-media-grammar.md](references/style-media-grammar.md) exactly as written. Add its Watercolor Eligibility Prompt Fragment only for explicitly retained distant continuous environmental fields; humans and animals are never eligible.
-6. Assemble [generation-prompt.md](references/generation-prompt.md) by replacing every placeholder once.
-7. Send the assembled prompt and source photograph in one image-transformation call.
+6. Use the Illustration Safety Margin Prompt Fragment from [layout-grammar.md](references/layout-grammar.md) exactly as written so the generated illustration preserves its complete image boundary without clipped peripheral marks.
+7. Assemble [generation-prompt.md](references/generation-prompt.md) by replacing every placeholder once.
+8. Send the assembled prompt and source photograph in one image-transformation call.
 
 Set `APPLICABLE_REPRESENTATION` from retained categories only:
 
@@ -50,4 +51,4 @@ Read [quality-guardrails.md](references/quality-guardrails.md) after generation.
 2. Run [compose_editorial.py](scripts/compose_editorial.py) with `runtime_source`, generated illustration, title, subtitle, and output path.
 3. Return the compositor output as the final image.
 
-The compositor is the sole owner of final presentation. For landscape and square sources, it places equal-size photo and illustration boards top-to-bottom. For portrait sources, it places equal-size boards left-to-right. The photo is contained at its original aspect ratio without cropping or stretching. The illustration board ends with a two-line, right-aligned Kaushan Script footer whose color is selected from the illustration. Its packaged script and assets define that contract.
+The compositor is the sole owner of final presentation. For landscape and square sources, it places the photo and complete generated illustration image top-to-bottom. For portrait sources, it places them left-to-right. The photo is contained at its original aspect ratio without cropping or stretching. The complete generated illustration image keeps its rectangular boundary and aspect ratio; the compositor does not crop it down to visible marks. Use the estimated illustration paper color for the final canvas. Scale the two-line Caveat Regular footer from the final canvas short edge and use a line gap equal to 0.525 times the font size. Align the actual right edge of both text lines directly to the right edge of the complete placed illustration image, and give the footer bottom edge the same vertical safe margin used above the illustration image. Make each safe margin twice the gap between the illustration image and the first text line. Its packaged script, assets, and behavior tests define that contract.
