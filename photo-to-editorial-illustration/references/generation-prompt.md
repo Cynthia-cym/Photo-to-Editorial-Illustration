@@ -1,4 +1,4 @@
-# Photo Abstraction — Image Prompt
+# Photo-to-Editorial Illustration — Image Prompt
 
 ## Assembly Contract
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve paths for the isolated photo-abstraction image runtime."""
+"""Resolve paths for the isolated photo-to-editorial-illustration image runtime."""
 
 import argparse
 import json
@@ -48,7 +48,7 @@ def resolve_cache_root(
         candidate = Path(override) if override else None
         base = candidate if candidate and candidate.is_absolute() else home / ".cache"
 
-    return base / "photo-abstraction" / RUNTIME_VERSION
+    return base / "photo-to-editorial-illustration" / RUNTIME_VERSION
 
 
 def _runtime_paths_from_root(

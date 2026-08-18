@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Detect and validate one photo-abstraction source image."""
+"""Detect and validate one photo-to-editorial-illustration source image."""
 
 import argparse
 import errno

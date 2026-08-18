@@ -1,9 +1,9 @@
 ---
-name: photo-abstraction
+name: photo-to-editorial-illustration
 description: Use when a user wants to transform one photograph containing people, animals, landscapes, architecture, plants, or objects into a minimal mid-century European couture editorial composition with the faithful source photo above a generated illustration panel.
 ---
 
-# Photo Abstraction
+# Photo-to-Editorial Illustration
 
 Require exactly one source photograph. Request it when it is missing.
 
