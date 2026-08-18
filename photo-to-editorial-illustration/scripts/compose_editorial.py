@@ -2,7 +2,7 @@
 """Deterministically compose a source photo and generated illustration.
 
 The image model creates the illustration only. This compositor owns the final
-photo/panel geometry, title, and four-color palette.
+photo/illustration geometry and two-line editorial footer.
 """
 
 import argparse
@@ -13,7 +13,7 @@ import re
 from collections import deque
 from pathlib import Path
 from statistics import median
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Tuple
 
 from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
@@ -21,41 +21,33 @@ from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 RGB = Tuple[int, int, int]
 
 CONFIG = {
-    "near_square_min": 0.90,
-    "near_square_max": 1.10,
     "max_canvas_width": 2048,
     "paper_color": (249, 247, 241),
     "motif_width_ratio": 0.72,
     "motif_max_height_ratio": 0.62,
     "panel_padding_ratio": 0.06,
-    "footer_padding_ratio": 0.055,
-    "footer_height_ratio": 0.18,
-    "chip_size_ratio": 0.036,
-    "chip_gap_ratio": 0.014,
-    "font_size_ratio": 0.036,
+    "footer_right_padding_ratio": 0.055,
+    "footer_height_ratio": 0.17,
+    "font_size_ratio": 0.045,
+    "line_gap_ratio": 0.35,
     "paper_distance_low": 10,
     "paper_distance_high": 42,
     "component_thumbnail_max": 512,
     "component_relative_area": 0.001,
 }
 
-FONT_PATH = Path(__file__).resolve().parents[1] / "assets" / "fonts" / "NotoSans-Regular.ttf"
-
-FALLBACK_PALETTE: Tuple[RGB, ...] = (
-    (138, 105, 88),
-    (57, 48, 54),
-    (221, 215, 202),
-    (205, 169, 105),
+FONT_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "assets"
+    / "fonts"
+    / "KaushanScript-Regular.ttf"
 )
+
+FALLBACK_TEXT_COLOR: RGB = (138, 105, 88)
 
 
 def classify_orientation(width: int, height: int) -> str:
-    ratio = width / height
-    if ratio > CONFIG["near_square_max"]:
-        return "landscape"
-    if ratio < CONFIG["near_square_min"]:
-        return "portrait"
-    return "near-square"
+    return "landscape" if width >= height else "portrait"
 
 
 def _open_oriented(path: Path) -> Image.Image:
@@ -194,10 +186,6 @@ def _luminance(color: RGB) -> float:
     return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 
 
-def _color_distance(first: RGB, second: RGB) -> float:
-    return math.sqrt(sum((a - b) ** 2 for a, b in zip(first, second)))
-
-
 def _saturation(color: RGB) -> int:
     return max(color) - min(color)
 
@@ -206,7 +194,7 @@ def _is_near_paper(color: RGB) -> bool:
     return _luminance(color) > 232 and _saturation(color) < 24
 
 
-def _extract_palette(layer: Image.Image) -> List[RGB]:
+def _ranked_illustration_colors(layer: Image.Image) -> List[Tuple[int, RGB]]:
     sample = layer.copy()
     sample.thumbnail((360, 360), Image.Resampling.LANCZOS)
     pixels = [
@@ -215,68 +203,54 @@ def _extract_palette(layer: Image.Image) -> List[RGB]:
         if pixel[3] >= 80 and not _is_near_paper(pixel[:3])
     ]
     if not pixels:
-        return list(FALLBACK_PALETTE)
+        return []
 
     strip = Image.new("RGB", (len(pixels), 1))
     strip.putdata(pixels)
     counts = strip.getcolors(maxcolors=4096)
     if counts is None:
-        quantized = strip.quantize(colors=24, method=Image.Quantize.MEDIANCUT).convert("RGB")
-        counts = quantized.getcolors(maxcolors=24)
-    ranked = sorted(counts or [], key=lambda item: item[0], reverse=True)
-    ranked = [(count, color) for count, color in ranked if not _is_near_paper(color)]
-    if not ranked:
-        return list(FALLBACK_PALETTE)
-
-    total = sum(count for count, _ in ranked)
-    substantial = [
-        color for count, color in ranked if count >= max(1, round(total * 0.04))
-    ]
-    candidates = [color for _, color in ranked]
-    role_pool = substantial or candidates
-
-    dominant = role_pool[0]
-    remaining = [color for color in role_pool if _color_distance(color, dominant) >= 20]
-    dark = min(remaining or candidates, key=_luminance)
-
-    remaining = [
-        color
-        for color in role_pool
-        if all(_color_distance(color, selected) >= 20 for selected in (dominant, dark))
-    ]
-    neutral = [
-        color for color in remaining if _luminance(color) >= 160 and _saturation(color) <= 65
-    ]
-    light = max(neutral or remaining or candidates, key=_luminance)
-
-    remaining = [
-        color
-        for color in role_pool
-        if all(
-            _color_distance(color, selected) >= 20
-            for selected in (dominant, dark, light)
-        )
-        and _saturation(color) <= 140
-    ]
-    accent = max(
-        remaining or candidates,
-        key=lambda color: (_saturation(color), _color_distance(color, dominant)),
+        quantized = strip.quantize(colors=32, method=Image.Quantize.MEDIANCUT).convert("RGB")
+        counts = quantized.getcolors(maxcolors=32)
+    return sorted(
+        (
+            (count, color)
+            for count, color in counts or []
+            if not _is_near_paper(color)
+        ),
+        key=lambda item: item[0],
+        reverse=True,
     )
 
-    role_choices = (dominant, dark, light, accent)
-    palette: List[RGB] = []
-    for index, choice in enumerate(role_choices):
-        options = [choice, FALLBACK_PALETTE[index], *candidates, *FALLBACK_PALETTE]
-        selected = next(
-            (
-                color
-                for color in options
-                if all(_color_distance(color, existing) >= 20 for existing in palette)
-            ),
-            FALLBACK_PALETTE[index],
+
+def _select_text_color(layer: Image.Image) -> RGB:
+    ranked = _ranked_illustration_colors(layer)
+    if not ranked:
+        return FALLBACK_TEXT_COLOR
+
+    total = sum(count for count, _ in ranked)
+    candidates = []
+    for count, color in ranked:
+        luminance = _luminance(color)
+        saturation = _saturation(color)
+        warmth = color[0] - color[2]
+        if not (42 <= luminance <= 168):
+            continue
+        if saturation > 105 or warmth < -12:
+            continue
+        if _luminance(CONFIG["paper_color"]) - luminance < 70:
+            continue
+        prevalence = count / total
+        score = (
+            prevalence * 160
+            + warmth * 0.55
+            - abs(luminance - 100) * 0.30
+            - abs(saturation - 48) * 0.16
         )
-        palette.append(selected)
-    return palette
+        candidates.append((score, color))
+
+    if not candidates:
+        return FALLBACK_TEXT_COLOR
+    return max(candidates, key=lambda item: item[0])[1]
 
 
 def _hex(color: RGB) -> str:
@@ -289,26 +263,38 @@ def _load_font(size: int) -> Tuple[ImageFont.ImageFont, str]:
     return ImageFont.truetype(FONT_PATH, size=size), str(FONT_PATH)
 
 
-def _title_color(palette: Sequence[RGB]) -> RGB:
-    non_black = [color for color in palette if _luminance(color) >= 22]
-    return min(non_black or list(palette), key=_luminance)
+def _validate_copy(title: str, subtitle: str) -> None:
+    word_pattern = r"[A-Za-z]+(?:[-'][A-Za-z]+)?"
+    title_words = re.findall(word_pattern, title)
+    subtitle_words = re.findall(word_pattern, subtitle)
+    if not 2 <= len(title_words) <= 4 or " ".join(title_words) != title.strip():
+        raise ValueError("title must contain 2–4 English words")
+    normalized_subtitle = subtitle.strip().rstrip(".!?")
+    if not 4 <= len(subtitle_words) <= 8 or " ".join(subtitle_words) != normalized_subtitle:
+        raise ValueError("subtitle must contain 4–8 English words")
 
 
-def _validate_title(title: str) -> None:
-    words = re.findall(r"[A-Za-z]+(?:[-'][A-Za-z]+)?", title)
-    if len(words) not in (2, 3) or " ".join(words) != title.strip():
-        raise ValueError("title must contain exactly 2–3 English words")
+def _fit_font(lines: Tuple[str, str], preferred_size: int, maximum_width: int):
+    size = preferred_size
+    while size >= 18:
+        font, font_used = _load_font(size)
+        widths = [font.getbbox(line)[2] - font.getbbox(line)[0] for line in lines]
+        if max(widths) <= maximum_width:
+            return font, font_used, size
+        size -= 1
+    raise ValueError("footer copy is too long for the illustration board")
 
 
 def compose_editorial(
     source_photo_path,
     generated_illustration_path,
     title: str,
+    subtitle: str,
     output_path,
 ) -> Dict[str, object]:
     """Create one deterministic photo-plus-illustration editorial composition."""
 
-    _validate_title(title)
+    _validate_copy(title, subtitle)
     source_path = Path(source_photo_path).expanduser().resolve()
     illustration_path = Path(generated_illustration_path).expanduser().resolve()
     destination = Path(output_path).expanduser().resolve()
@@ -319,30 +305,40 @@ def compose_editorial(
     illustration_dimensions = list(illustration.size)
     orientation = classify_orientation(*source.size)
 
-    canvas_width = min(source.width, CONFIG["max_canvas_width"])
-    photo = _resize_width(source, canvas_width)
-    panel_height = photo.height
-    final_height = photo.height + panel_height
-    panel_top = photo.height
+    board_width = min(source.width, CONFIG["max_canvas_width"])
+    photo = _resize_width(source, board_width)
+    board_width, board_height = photo.size
+    if orientation == "landscape":
+        layout = "stacked"
+        photo_origin = (0, 0)
+        illustration_origin = (0, board_height)
+        final_dimensions = (board_width, board_height * 2)
+    else:
+        layout = "side-by-side"
+        photo_origin = (0, 0)
+        illustration_origin = (board_width, 0)
+        final_dimensions = (board_width * 2, board_height)
 
-    canvas = Image.new("RGB", (canvas_width, final_height), CONFIG["paper_color"])
-    canvas.paste(photo, (0, 0))
+    board_left, board_top = illustration_origin
+    canvas = Image.new("RGB", final_dimensions, CONFIG["paper_color"])
+    canvas.paste(photo, photo_origin)
 
     layer, illustration_bbox = _illustration_layer(illustration)
-    palette = _extract_palette(layer)
+    text_color = _select_text_color(layer)
 
-    footer_padding = round(canvas_width * CONFIG["footer_padding_ratio"])
-    chip_size = max(24, round(canvas_width * CONFIG["chip_size_ratio"]))
-    chip_gap = max(8, round(canvas_width * CONFIG["chip_gap_ratio"]))
-    font_size = max(28, round(canvas_width * CONFIG["font_size_ratio"]))
-    footer_height = round(panel_height * CONFIG["footer_height_ratio"])
-    illustration_area_height = panel_height - footer_height
+    footer_right_padding = round(
+        board_width * CONFIG["footer_right_padding_ratio"]
+    )
+    footer_height = round(board_height * CONFIG["footer_height_ratio"])
+    illustration_area_height = board_height - footer_height
 
-    target_width = round(canvas_width * CONFIG["motif_width_ratio"])
-    target_height = round(panel_height * CONFIG["motif_max_height_ratio"])
+    target_width = round(board_width * CONFIG["motif_width_ratio"])
+    target_height = round(board_height * CONFIG["motif_max_height_ratio"])
     requested_scale = min(target_width / layer.width, target_height / layer.height)
-    panel_padding = round(min(canvas_width, panel_height) * CONFIG["panel_padding_ratio"])
-    maximum_width = max(1, canvas_width - panel_padding * 2)
+    panel_padding = round(
+        min(board_width, board_height) * CONFIG["panel_padding_ratio"]
+    )
+    maximum_width = max(1, board_width - panel_padding * 2)
     maximum_height = max(1, illustration_area_height - panel_padding * 2)
     contain_scale = min(maximum_width / layer.width, maximum_height / layer.height)
     scale = min(requested_scale, contain_scale)
@@ -352,35 +348,49 @@ def compose_editorial(
     )
     motif = layer.resize(motif_size, Image.Resampling.LANCZOS)
 
-    motif_x = round((canvas_width - motif.width) / 2)
+    motif_x = board_left + round((board_width - motif.width) / 2)
     visible_alpha = motif.getchannel("A").point(
         lambda value: 255 if value >= 80 else 0
     )
     visible_bbox = visible_alpha.getbbox() or (0, 0, motif.width, motif.height)
     visible_center_y = (visible_bbox[1] + visible_bbox[3]) / 2
-    usable_top = panel_top + panel_padding
-    usable_bottom = panel_top + illustration_area_height
+    usable_top = board_top + panel_padding
+    usable_bottom = board_top + illustration_area_height
     motif_y = round((usable_top + usable_bottom) / 2 - visible_center_y)
     canvas.paste(motif, (motif_x, motif_y), motif)
 
     draw = ImageDraw.Draw(canvas)
-    font, font_used = _load_font(font_size)
-    title_color = _title_color(palette)
-    footer_bottom = final_height - footer_padding
-    chip_y = footer_bottom - chip_size
-    total_chip_width = chip_size * 4 + chip_gap * 3
-    chip_x = canvas_width - footer_padding - total_chip_width
-    chip_boxes = []
-    for index, color in enumerate(palette):
-        left = chip_x + index * (chip_size + chip_gap)
-        box = (left, chip_y, left + chip_size, chip_y + chip_size)
-        draw.rectangle(box, fill=color)
-        chip_boxes.append(list(box))
-
-    title_bbox = draw.textbbox((0, 0), title, font=font)
+    preferred_font_size = max(
+        24,
+        round(min(board_width, board_height) * CONFIG["font_size_ratio"]),
+    )
+    text_width = board_width - footer_right_padding * 2
+    font, font_used, font_size = _fit_font(
+        (title, subtitle), preferred_font_size, text_width
+    )
+    line_gap = round(font_size * CONFIG["line_gap_ratio"])
+    title_bbox = font.getbbox(title)
+    subtitle_bbox = font.getbbox(subtitle)
     title_height = title_bbox[3] - title_bbox[1]
-    title_y = footer_bottom - max(chip_size, title_height)
-    draw.text((footer_padding, title_y), title, font=font, fill=title_color)
+    subtitle_height = subtitle_bbox[3] - subtitle_bbox[1]
+    text_block_height = title_height + line_gap + subtitle_height
+    footer_top = board_top + illustration_area_height
+    footer_bottom = board_top + board_height
+    text_top = footer_top + round((footer_height - text_block_height) / 2)
+    text_right = board_left + board_width - footer_right_padding
+
+    title_position = (text_right - title_bbox[2], text_top - title_bbox[1])
+    subtitle_top = text_top + title_height + line_gap
+    subtitle_position = (
+        text_right - subtitle_bbox[2],
+        subtitle_top - subtitle_bbox[1],
+    )
+    draw.text(title_position, title, font=font, fill=text_color)
+    draw.text(subtitle_position, subtitle, font=font, fill=text_color)
+    rendered_title_box = list(draw.textbbox(title_position, title, font=font))
+    rendered_subtitle_box = list(
+        draw.textbbox(subtitle_position, subtitle, font=font)
+    )
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     canvas.save(destination, format="PNG", optimize=False, compress_level=6)
@@ -390,32 +400,50 @@ def compose_editorial(
         "source_aspect_ratio": round(source.width / source.height, 8),
         "illustration_dimensions": illustration_dimensions,
         "orientation": orientation,
-        "photo_ratio": 0.5,
-        "panel_ratio": 0.5,
+        "layout": layout,
         "photo_dimensions": list(photo.size),
-        "panel_dimensions": [canvas_width, panel_height],
-        "photo_panel_dimensions_match": list(photo.size) == [canvas_width, panel_height],
-        "photo_panel_aspect_ratio_match": photo.width * panel_height
-        == canvas_width * photo.height,
-        "final_dimensions": [canvas_width, final_height],
+        "illustration_board_dimensions": [board_width, board_height],
+        "photo_illustration_board_dimensions_match": list(photo.size)
+        == [board_width, board_height],
+        "photo_aspect_ratio_preserved": math.isclose(
+            source.width / source.height,
+            photo.width / photo.height,
+            rel_tol=0,
+            abs_tol=1 / max(photo.size),
+        ),
+        "photo_box": [
+            photo_origin[0],
+            photo_origin[1],
+            photo_origin[0] + board_width,
+            photo_origin[1] + board_height,
+        ],
+        "illustration_board_box": [
+            board_left,
+            board_top,
+            board_left + board_width,
+            board_top + board_height,
+        ],
+        "final_dimensions": list(final_dimensions),
         "illustration_source_bbox": list(illustration_bbox),
         "motif_box": [motif_x, motif_y, motif_x + motif.width, motif_y + motif.height],
         "motif_dimensions": list(motif.size),
         "motif_effective_scale": scale,
-        "palette_hex": [_hex(color) for color in palette],
-        "title_color": _hex(title_color),
+        "text_color": _hex(text_color),
         "font_used": font_used,
         "font_size": font_size,
-        "chip_size": chip_size,
-        "chip_gap": chip_gap,
+        "line_gap": line_gap,
         "footer_box": [
-            0,
-            panel_top + illustration_area_height,
-            canvas_width,
-            final_height,
+            board_left,
+            footer_top,
+            board_left + board_width,
+            footer_bottom,
         ],
-        "title_position": [footer_padding, title_y],
-        "chip_boxes": chip_boxes,
+        "footer_height_ratio": CONFIG["footer_height_ratio"],
+        "footer_right_padding": footer_right_padding,
+        "title": title,
+        "subtitle": subtitle,
+        "title_box": rendered_title_box,
+        "subtitle_box": rendered_subtitle_box,
         "output_sha256": hashlib.sha256(destination.read_bytes()).hexdigest(),
     }
 
@@ -425,6 +453,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--source-photo", required=True)
     parser.add_argument("--illustration", required=True)
     parser.add_argument("--title", required=True)
+    parser.add_argument("--subtitle", required=True)
     parser.add_argument("--output", required=True)
     return parser.parse_args()
 
@@ -435,6 +464,7 @@ def main() -> None:
         source_photo_path=args.source_photo,
         generated_illustration_path=args.illustration,
         title=args.title,
+        subtitle=args.subtitle,
         output_path=args.output,
     )
     print(json.dumps(metadata, indent=2, sort_keys=True))

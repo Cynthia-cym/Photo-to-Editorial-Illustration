@@ -1,6 +1,6 @@
 ---
 name: photo-to-editorial-illustration
-description: Use when a user wants to transform one photograph containing people, animals, landscapes, architecture, plants, or objects into a minimal mid-century European couture editorial composition with the faithful source photo above a generated illustration panel.
+description: Use when a user wants to transform one photograph containing people, animals, landscapes, architecture, plants, or objects into a minimal mid-century European couture editorial composition pairing the faithful source photo with a generated illustration board.
 ---
 
 # Photo-to-Editorial Illustration
@@ -9,7 +9,7 @@ Require exactly one source photograph. Request it when it is missing.
 
 Use this fixed sequence:
 
-**SOURCE PHOTO → SOURCE PREFLIGHT → CONTENT DISTILLATION → ONE ILLUSTRATION GENERATION → ILLUSTRATION EVALUATION → 2–3 WORD TITLE → DETERMINISTIC COMPOSITION → FINAL IMAGE**
+**SOURCE PHOTO → SOURCE PREFLIGHT → CONTENT DISTILLATION → ONE ILLUSTRATION GENERATION → ILLUSTRATION EVALUATION → TWO-LINE ENGLISH COPY → DETERMINISTIC COMPOSITION → FINAL IMAGE**
 
 ## Prepare the Source
 
@@ -46,8 +46,8 @@ Read [quality-guardrails.md](references/quality-guardrails.md) after generation.
 
 ## Compose and Return
 
-1. Create one quiet, source-grounded English title containing exactly 2–3 words.
-2. Run [compose_editorial.py](scripts/compose_editorial.py) with `runtime_source`, generated illustration, title, and output path.
+1. Create two quiet, source-grounded English lines: a 2–4 word title and a natural 4–8 word subtitle.
+2. Run [compose_editorial.py](scripts/compose_editorial.py) with `runtime_source`, generated illustration, title, subtitle, and output path.
 3. Return the compositor output as the final image.
 
-The compositor is the sole owner of final presentation. Its packaged script and assets define that contract.
+The compositor is the sole owner of final presentation. For landscape and square sources, it places equal-size photo and illustration boards top-to-bottom. For portrait sources, it places equal-size boards left-to-right. The photo is contained at its original aspect ratio without cropping or stretching. The illustration board ends with a two-line, right-aligned Kaushan Script footer whose color is selected from the illustration. Its packaged script and assets define that contract.
