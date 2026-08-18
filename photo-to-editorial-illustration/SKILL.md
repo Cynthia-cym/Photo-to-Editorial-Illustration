@@ -47,7 +47,7 @@ Read [quality-guardrails.md](references/quality-guardrails.md) after generation.
 
 ## Compose and Return
 
-1. Create two quiet, source-grounded English lines: a 2–4 word title and a natural 4–8 word subtitle.
+1. Create two quiet English lines: a 2–4 word poetic title lightly grounded in the scene, and a natural 4–8 word postcard-style sentence expressing a gentle wish, mood, or memory. The subtitle must not describe, count, identify, or summarize visible subjects.
 2. Run [compose_editorial.py](scripts/compose_editorial.py) with `runtime_source`, generated illustration, title, subtitle, and output path.
 3. Return the compositor output as the final image.
 
