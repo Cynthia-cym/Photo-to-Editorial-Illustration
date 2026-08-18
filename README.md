@@ -11,8 +11,8 @@
 <p align="center"><b>Keep the photograph. Reimagine its visual memory.</b></p>
 
 <p align="center">
-  <a href="#install">Install</a> ·
-  <a href="#use">Use</a> ·
+  <a href="#overview">Overview</a> ·
+  <a href="#quick-start">Quick Start</a> ·
   <a href="#how-it-works">How it works</a> ·
   <a href="#what-it-preserves">What it preserves</a> ·
   <a href="#privacy">Privacy</a>
@@ -22,18 +22,24 @@
   <img src="docs/preview/hero.png" alt="Three fictional photographs paired with their marker-led editorial illustrations" width="100%">
 </p>
 
+## Overview
+
 An installable Codex Skill that transforms one source photograph into a clean editorial composition. Landscape and square photos stack above the illustration; portrait photos sit beside it. The original photo remains intact, and the deterministic footer uses two quiet English lines.
 
-## Install
+## Quick Start
+
+### 1. Install
 
 ```bash
 npx skills add https://github.com/Cynthia-cym/Photo-to-Editorial-Illustration \
   --skill photo-to-editorial-illustration
 ```
 
+### 2. Start a new Codex task
+
 Open a new Codex task after installation so the Skill is discovered.
 
-## Use
+### 3. Transform a photo
 
 Attach exactly one photograph and ask Codex:
 
